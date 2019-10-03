@@ -1740,53 +1740,60 @@ EOF
                     $sql =~ s/(dbo)\./relabel_schemas($1) . '.'/eg
                         ;    # We put this in the replacement schema
 		    # print STDERR "code view: ".$sql."\n";
-		    # parse the query view
-		    if ( $sql =~ /^\s*\(([^\)]+)\)\s*AS\s+SELECT\s+(.*)\s+FROM\s+(.*)$/i) {
-		       my $view_columns = $1;
-		       my $query_columns = $2;
-		       my $query_end = $3;
-		       my @rebuilt_view_columns = ();
+		    
+		    # This RegEx matches CREATE VIEW statements that include column names for the view prior to the SELECT statement
+		    # if ( $sql =~ /^\s*\(([^\)]+)\)\s*AS\s+SELECT\s+(.*)\s+FROM\s+(.*)$/is) {
+		    #   my $view_columns = $1;
+		    #   my $query_columns = $2;
+		    #   my $query_end = $3;
+		    
+		    # This RegEx matches CREATE VIEW statements that have a SELECT statement directly after the AS
+		    if ( $sql =~ m/^\s*AS\s+SELECT\s+(.*)\s+FROM\s+(.*)$/is) {
+		       my $query_columns = $1;
+		       my $query_end = $2;
+		       
+		       # print STDERR "query_columns: ".$query_columns."\n";
+		       # print STDERR "query_end:     ".$query_end."\n";
+		       
+		       # my @rebuilt_view_columns = ();
 		       my @rebuilt_query_columns = ();
 		       my @string_column = ();
 
 		       # format columns names
-		       foreach my $view_col (split (',',$view_columns)) {
-			  $view_col =~ s/^\s+|\s+$//g;
-			  push @rebuilt_view_columns, format_identifier($view_col);
-		       }
-		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{COLS} =
-			  join(',', @rebuilt_view_columns);
+#		       foreach my $view_col (split (',',$view_columns)) {
+#			      $view_col =~ s/^\s+|\s+$//g;
+#			      push @rebuilt_view_columns, format_identifier($view_col);
+#		       }
+#		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{COLS} = join(',', @rebuilt_view_columns);
 
 		       # format view query columns
+		       # Replace IsNull with Coalesce
+		       # Switch from Convert() to Cast()
 		       foreach my $view_query_col (split (',',$query_columns)) {
-			  if ($view_query_col
-				 =~ /^.*\+\s*N?'.*'\s*|\s*N?'.*'\s*\+.*|.*\+\s*N?'.*'\s*\+.*$/i) {
-			     # PG use '||' to concatenate strings, change '+' to '||'
-			     @string_column = ();
-			     my $lhs;
-			     while ($view_query_col =~ /^\s*(N?'.*?'|[^']+?)\s*\+\s*(.*)$/i) {
-				$lhs = $1;
-				$view_query_col = $2;
-				$lhs = $1 if ($lhs =~ /N('.*?')/);
-				push @string_column, $lhs;
-			     }
-			     $view_query_col = $1 if ($view_query_col =~ /N('.*?')/);
-			     push @string_column, $view_query_col;
-			     push @rebuilt_query_columns, join('||', @string_column);
-			  }
-			  else {
-			     push @rebuilt_query_columns, $view_query_col;
-			  }
-		       }
-		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{QUERYCOLS} =
-			  convert_transact_function(join(',', @rebuilt_query_columns));
+			      if ($view_query_col =~ /^.*\+\s*N?'.*'\s*|\s*N?'.*'\s*\+.*|.*\+\s*N?'.*'\s*\+.*$/i) {
+    			     # PG use '||' to concatenate strings, change '+' to '||'
+    			     @string_column = ();
+    			     my $lhs;
+    			     while ($view_query_col =~ /^\s*(N?'.*?'|[^']+?)\s*\+\s*(.*)$/i) {
+    				$lhs = $1;
+    				$view_query_col = $2;
+    				$lhs = $1 if ($lhs =~ /N('.*?')/);
+    				push @string_column, $lhs;
+    			     }
+    			     $view_query_col = $1 if ($view_query_col =~ /N('.*?')/);
+    			     push @string_column, $view_query_col;
+    			     push @rebuilt_query_columns, join('||', @string_column);
+    			  }
+    			  else {
+    			     push @rebuilt_query_columns, $view_query_col;
+    			  }
+    		  }
+		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{QUERYCOLS} = convert_transact_function(join(',', @rebuilt_query_columns));
 
-		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{QUERY} =
-			  convert_transact_function($query_end);
+		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{QUERY} = convert_transact_function($query_end);
 		    }
 		    else {
-		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{SQL} =
-			  $sql;
+		       $objects->{SCHEMAS}->{$schemaname}->{VIEWS}->{$viewname}->{SQL} = $sql;
 		    }
 
                     # Views will be stored without the full schema in them. We will
@@ -2941,10 +2948,12 @@ sub generate_schema
 	print UNSURE "CREATE VIEW "
 	   . format_identifier($schema) . '.' . format_identifier($view) . " ";
 	if (not defined $refschema->{VIEWS}->{$view}->{SQL}) {
-	   my $view_columns = $refschema->{VIEWS}->{$view}->{COLS};
+#	   my $view_columns = $refschema->{VIEWS}->{$view}->{COLS};
 	   my $query_columns = $refschema->{VIEWS}->{$view}->{QUERYCOLS};
 	   my $query = $refschema->{VIEWS}->{$view}->{QUERY};
-	   print UNSURE "($view_columns) AS\n\tSELECT\n\t\t"
+#	   print UNSURE "($view_columns) AS\n\tSELECT\n\t\t"
+#	      . $query_columns . "\n\t" . "FROM $query;\n\n";
+	   print UNSURE "\nAS\nSELECT "
 	      . $query_columns . "\n\t" . "FROM $query;\n\n";
 	}
 	else {
