@@ -334,7 +334,7 @@ sub convert_type
         $rettype = "citext";
 
         # Do we have a SQL qualifier ? (we'll have to do check constraints then)
-        if ($sqlqual and not defined($skip_citext_length_check))
+        if ($sqlqual and not defined($skip_citext_length_check) or $sqlqual and $skip_citext_length_check == 0)
         {
 
             # Check we have a table name and a colname, or a typname
