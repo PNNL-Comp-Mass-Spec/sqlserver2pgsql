@@ -522,7 +522,7 @@ sub convert_transact_function
    my ($code)=@_;
    $code =~ s/ISNULL\s*\(/COALESCE(/gi;
    $code =~ s/getdate\s*\(\)/CURRENT_TIMESTAMP/gi;
-   $code =~ s/user_name\s*\(\)/CURRENT_USER/gi;
+   $code =~ s/user_name\s*\(\)/session_user/gi;
    $code =~ s/datepart\s*\(\s*(.*?)\s*\,\s*(.*?)\s*\)/date_part('$1', $2)/gi;
    $code =~ s/CONVERT\s*\(\s*NVARCHAR\s*(.*?)\s*\(\s*(.*?)\s*\s*\)\,\s*(.*?)\s*\)/CAST($3 AS varchar($2))/gi;
    $code =~ s/CONVERT\s*\(\s*(.*?)\s*\(\s*(.*?)\s*\s*\)\,\s*(.*?)\s*\)/CAST($3 AS $1($2))/gi;
