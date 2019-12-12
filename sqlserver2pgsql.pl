@@ -1964,12 +1964,16 @@ EOF
                                 ->{INDEXES}->{$idxname}->{COLS}}, ("$1");
                     }
                 }
-                if ($idx =~ /^INCLUDE \(/)
+                if ($idx =~ /^INCLUDE *\(/)
                 {
+                    my $matchResult = ($idx =~ /^INCLUDE *\(([^)]+)\)/);
+                    print "\n";
                     print STDERR
-                        "Warning: This index ($schemaname.$tablename.$idxname) has some include columns. This isn't supported in PostgreSQL.\n";
-                    print STDERR
-                        "\tThe columns in the INCLUDE clause have been ignored.\n";
+                        "Warning: index ($schemaname.$tablename.$idxname) has some include columns. Support for these was added to PostgreSQL 11\n";
+                        
+                    push @{$objects->{SCHEMAS}->{$schemaname}->{TABLES}->{$tablename}
+                            ->{INDEXES}->{$idxname}->{INCLUDE}}, ("$1");
+                                
                     next
                         ; # Nothing equivalent in PG. Maybe if the index isn't unique, these columns should be added?
                 }
@@ -2763,6 +2767,22 @@ sub generate_schema
                      . join(",", map{format_identifier_cols_index($_)} @{$idxref->{COLS}}) . ")";
                    if (not defined $idxref->{WHERE} and not defined $idxref->{DISABLE})
                    {
+                       if (defined $idxref->{INCLUDE})
+                       {
+                            my $includeList = join(",", map{format_identifier_cols_index($_)} @{$idxref->{INCLUDE}});
+                            
+                            # $includeList may look like "[entry_id],[mgr_id]"
+                            # Update it to be "entry_id","mgr_id"
+
+                            # Replace [ and ] with "
+                            my $includeListNoBrackets = $includeList =~ s/[\[\]]/"/gr;
+                            
+                            # Replace "" with "
+                            my $updatedIncludeList = $includeListNoBrackets =~ s/""/"/gr;
+                            
+                            $idxdef .= " INCLUDE (" . $updatedIncludeList . ")";
+                       }
+                       
                        $idxdef .= ";\n";
                        print AFTER $idxdef;
                        # the possible comment would go to after file
